@@ -1,0 +1,201 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath,amssymb}
+\usepackage[margin=1in]{geometry}
+
+\title{Analysis of a Video Game Survey}
+\author{Ryan Cooper, Duy Dao}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+Every year, around 1,500-2,000 students enroll in an introductory statistics course at UC Berkeley. The UC Berkeley administration is designing a series of computer labs for the students to learn concepts from their statistics class through a virtual learning environment. The purpose of this is to provide an alternative method for students to learn the material. These labs are heavily linked to video games. To develop improved teaching methods though the use of video games, a study was conducted by students in an advanced statistics class. 
+
+Out of 314 students in UC Berkeley's 1994 Statistics 2 class, 95 students were randomly selected for the survey and 91 students completed the survey. We first conduct exploratory data analysis on the sample to understand what fraction of students play video games and to what extent they do. To better develop the virtual environment for the students, we next analyze the reasons for why students like and dislike playing. We further compare the differences between the students who like to play with the students who don't. Lastly, we make recommendations based on our findings for how to structure the games to be integrated into a statistics lab.
+
+\section{Analysis}
+<<setup1, echo=F>>=
+opts_chunk$set(echo=F,fig.align='center')
+library(xtable)
+library(rpart)
+library(rpart.plot)
+options(xtable.floating = T)
+options(xtable.timestamp = "")
+
+dat = read.table('videodata.txt',header=T)
+dat = as.data.frame(
+  apply(dat, MARGIN=2, function(x){replace(x, x==99, NA)})
+  )
+attach(dat)
+N = 314 # Population size
+n = nrow(dat) # Sample size
+@
+
+The survey can be divided into three different components. The first part of the survey asks the students how many hours they spent playing video games in the week prior to the survey, how frequently they play video games and to what extent they like to play video games. The second part of the survey asks the students what type of video games they like and reasons why they like and dislike video games. The last part of the survey asks the students basic identifying information like gender, age, if they own a computer, etc.
+
+\subsection{Time Spent Playing Video Games Prior to the Exam}
+
+<<propPlayed>>=
+set.seed(123)
+ppe = mean(time>0) # Proportion played estimate
+ppe.SE = sqrt(ppe*(1-ppe)/(n-1))*sqrt((N-n)/N)
+
+alpha = 0.05
+ppe.CI = ppe + ppe.SE*c(1,-1)*qnorm(alpha/2)
+@
+
+In this section we look at the time played by the students in the week prior to the exam and compare it with the reported frequency. As a first step, we estimate the proportion of students that played video games in the week prior to the survey. The point estimate for the proportion is \Sexpr{round(ppe,3)}. In this survey the sampling fraction (sample size divided by population size) is \Sexpr{round(n/N, 3)} and therefore we cannot ignore the finite population correction factor. The estimated standard error in this case is \Sexpr{round(ppe.SE, 3)}. The approximate 95\% confidence interval obtained from the Central Limit Theorem is $(\Sexpr{round(ppe.CI, 3)})$. Due to simple random sampling the measurements are dependent, so we simulate the sample statistic to check the approximate normality assumption used in creating the confidence interval. The simulated distribution of the proportion is obtained by creating a bootstrap population of size 314 and recording the proportions for a large number of simple random samples from the bootstrap population. Figure \ref{fig:qqplot1} shows the Normal-quantile plot of the simulated distribution of the proportion against the standard normal distribution. The approximate normality is acceptable and justifies the approximate 95\% confidence interval.
+
+<<avg_time>>=
+tpe = mean(time) # time played estimate
+tpe.SE = sqrt(sum((time-tpe)^2)/(n-1))*sqrt((N-n)/(n*N))
+
+tpe.CI = tpe + tpe.SE*c(1,-1)*qnorm(alpha/2)
+@
+
+Next we consider estimating the population average for time played in the week prior to the exam. The point estimate for the average is \Sexpr{round(tpe,3)} with finite population corrected standard error \Sexpr{round(tpe.SE, 3)}. Similar to the proportion interval, we first create a bootstrap population and estimate the average times on a large number of simple random samples from the bootstrap population. Figure \ref{fig:qqplot2} shows the normal-quantile plot for this distribution. We accept the approximate normality and the resulting 95\% confidence interval (\Sexpr{round(tpe.CI, 3)}).
+
+Lastly we investigate how the time spent playing video games in the week prior to the survey compares with the reported frequency of video game playing. The possibly choices for frequency were daily, weekly, monthly, and semesterly with the number of students in each respective category being \Sexpr{table(freq)[1:3]} and \Sexpr{table(freq)[4]}. Table \ref{tab:fvt} shows the distribution of time for each frequency. Note that the outliers in both daily and weekly players make the mean time an unreliable estimator for the center of each distribution. We see that daily players play 1 to 4 hours per week, weekly players play 0.5 to 2 hours per week. And among the monthly and semesterly players, as one would expect, very few played in the week prior to the survey. Note that the estimated time played in the prior week might be lower due to the fact that there was an exam for the class during that week.
+
+<<freq_vs_time, results="asis">>=
+fvt = matrix(nrow = 4, ncol = 6)
+for(i in 1:4){
+  fvt[i,] = summary(time[freq==i])[1:6]
+}
+rownames(fvt) = c("Daily", "Weekly", "Monthly", "Semesterly")
+colnames(fvt) = c("Min.", "1st Qu.",
+                  "Median", "Mean", "3rd Qu.", "Max.")
+xvt = xtable(fvt, auto = T, label = "tab:fvt", caption = 
+           "Summary of the time distribution for each frequency")
+align(xvt) = "|lcccccc|"
+xvt
+@
+
+\begin{figure}[!h]
+<<qqplot1, fig.width=5, fig.height=4>>=
+# Create a bootstrap population for time played.
+time.bp = rep(
+  sort(unique(time)),
+  round(N/n*table(time))
+)
+time.bp[312:314] = c(1.5,3,4) #Add times to correct population size.
+
+sim.time = c(); sim.prop = c(); B = 1000
+for(i in 1:B){
+  sim.time[i] = mean(sample(time.bp, n))
+  sim.prop[i] = mean(sample(time.bp,n)>0)
+}
+
+qqnorm(sim.prop, main=NA); qqline(sim.prop)
+@
+\caption{Normal-quantile plot of the bootstrap proportion distribution.}\label{fig:qqplot1}
+\end{figure}
+
+\begin{figure}[!h]
+<<qqplot2, fig.width=5, fig.height=4>>=
+qqnorm(sim.time, main=NA); qqline(sim.time)
+@
+\caption{Normal-quantile plot of the bootstrap average time distribution.}\label{fig:qqplot2}
+\end{figure}
+
+\subsection{Favorable and Unfavorable Video Game Attributes}
+
+<<setup2>>=
+dat2 = read.table("videoMultiple.txt", header=T)
+dat2 = dat2[,-c(11,21)]
+dat2 = na.omit(dat2) #Remove respondents with NA
+@
+
+<<propLike>>=
+ple = mean((na.omit(like)==2)|(na.omit(like)==3))
+ple.SE = sqrt(ple*(1-ple)/(n-1))*sqrt((N-n)/N)
+
+alpha = 0.05
+ple.CI = ple + ple.SE*c(1,-1)*qnorm(alpha/2)
+@
+
+From the survey we estimate the proportion of students that like playing video games to be \Sexpr{round(ple,3)} with a 95\% confidence interval of (\Sexpr{round(ple.CI,3)}). We conclude that the majority of the students in the class enjoy playing video games.
+
+<<likeTable, results='asis'>>=
+lp = as.matrix(apply(dat2[,6:11],2,sum)/n)
+lp = lp[order(-lp),]
+lp.SE = sqrt(lp*(1-lp)/(n-1))*sqrt((N-n)/N)
+
+alpha = 0.05
+lp.CI = matrix(lp,nrow = 6, ncol = 2) + 
+  lp.SE%*%matrix(c(1,-1),nrow=1)*qnorm(alpha/2)
+
+lt = round(cbind(lp,lp.CI),3)
+
+lt[,2] = paste0("(", lt[,2],", ", lt[,3], ")")
+lt = lt[,1:2]
+
+colnames(lt) = c("Proportion", "95% CI")
+xlt.caption = paste("Reasons why students like video games.",
+                    "Each respondent was asked to select up to",
+                    "three reasons.")
+xlt = xtable(lt, caption = xlt.caption,
+             table.placement = "!h", label = "tab:lt")
+align(xlt) = "|lcc|"
+xlt
+@
+
+<<dislikeTable, results='asis'>>=
+dp = as.matrix(apply(dat2[,12:19],2,sum)/n)
+dp = dp[order(-dp),]
+dp.SE = sqrt(dp*(1-dp)/(n-1))*sqrt((N-n)/N)
+
+alpha = 0.05
+dp.CI = matrix(dp,nrow = 8, ncol = 2) + 
+  dp.SE%*%matrix(c(1,-1),nrow=1)*qnorm(alpha/2)
+dp.CI[8,1] = 0
+dt = round(cbind(dp,dp.CI),3)
+
+dt[,2] = paste0("(", dt[,2],", ", dt[,3], ")")
+dt = dt[,1:2]
+
+colnames(dt) = c("Proportion", "95% CI")
+
+xdt.caption = paste("Reasons why students dislike video games.",
+                    "Each student was asked to select up to 3",
+                    "reasons.")
+xdt = xtable(dt, caption = xdt.caption,
+             table.placement = "!h", label = "tab:dt")
+align(xdt) = "|lcc|"
+xdt
+@
+
+Those students who answered that they either liked video games very much, somewhat, or not really were asked to select up to three reasons why they like video games. The available choice were graphics, relaxation, eye/hand coordination, mental challenge, feeling of mastery, and bored. Table \ref{tab:lt} shows the percentage of students that selected the given choices. The reasons that received the majority of the vote were relaxation, mastery and boredom. Note that mastery, bored, graphic and challenge each received roughly the same number of votes. Hence we cannot infer which would rank highest among the population.
+
+Next all students were asked to select up to three reasons why they disliked video games. The possible choices were: too much time, frustrating, lonely, too many rules, cost to much, boring, friends don't play, it's pointless. Table \ref{tab:dt} shows the percentage of students that selected the given choices. From the responses, the main reasons that students dislike playing video games are that it takes too much time, it costs to much and it's pointless.
+
+\subsection{Comparison Between Students that Like Video Games and Students Who Don't}
+The last part of the survey asks for general information about the respondent, e.g. age and gender. In this section we use these general questions to differentiate those students that like video games and those that don't. To facilitate this process we use a decision tree. More specifically, we classify whether a student likes video games based on their gender, how many hours they work, if they own a computer and if they expect an A in the course. Figure \ref{fig:tree} shows the results of the decision tree. The majority of students that like video games fall into one of three types: students who work more than 5 hours (\Sexpr{round(100*4/36)}\% misclassification), students who work at most 5 hours and don't own a computer (\Sexpr{round(100*1/12)}\% misclassification), and students who work less than 5 hours, own a computer and are male (\Sexpr{round(100*6/22)}\% misclassification). The only category where the majority of students disliked video games was among students that worked less than 5 hours, owned a computer, were female and expected an A. However, the misclassification rate in this category is high, so this classification is unreliable.
+
+\begin{figure}[!ht]
+<<tree>>=
+d = which(like==1)
+
+# Condense like
+dat$cl  = factor(1*(like==2 | like==3),
+                 labels = c("Dislike","Like"))
+dat$gender = factor(sex, labels = c("Female","Male"))
+dat$comp = factor(home, labels = c("No", "Yes"))
+dat$expectA = factor(1*(grade==4), labels = c("No","Yes"))
+
+fit = rpart(cl ~ gender + comp + work + expectA,
+            data = dat[-d,],
+            method = 'class',
+            control = rpart.control(minsplit = 5))
+
+rpart.plot(fit, type = 4, extra = 101)
+@
+\caption{Decision tree for determining if a student likes or dislikes video games. The predictor variables used in the tree are gender, hours of paid work, own a computer, and expect an A in the course. }\label{fig:tree}
+\end{figure}
+
+\section{Conclusion}
+After analyzing the data collected from the survey, our team has emerged with suggestions in order to assist the designers of the new computer lab for statistics courses. 
+
+One of the main reasons that students disliked video games was that they are too time consuming. Among the students that play video games on a daily or weekly basis, we found that the median time played in the week prior to the survey was 2 hours. We suggest that the statistics course should have a shortened lab time in order to keep all students engaged in the video game. To match the average amount of time spent playing in the week prior to the survey, the lab  time should be in the range of half an hour to an hour and a half. The shortened lab duration will allow these students to feel less overwhelmed with the time commitment. Moreover, the lab should not be too intense since the most important reason students played video games was to relax. The game should also come equipped with multiple levels, in order for the students to feel a sense of accomplishment or mastery in the lab. 
+
+\end{document}
